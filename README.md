@@ -123,4 +123,5 @@ cognitive-orgies/
 
 ## 🙏 Credits
 
-Made for **Fab Lab Barcelona / IAAC** · MDEF programme.
+Created with love by Santi Fuentemilla @ Fab Lab Barcelona · CC BY-NC-SA 4.0
+
