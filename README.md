@@ -123,5 +123,9 @@ cognitive-orgies/
 
 ## 🙏 Credits
 
-Created with love by Santi Fuentemilla @ Fab Lab Barcelona · CC BY-NC-SA 4.0
+This project is licensed under the CC BY-NC-SA 4.0 — the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License.
+
+Original concept and design by Santi Fuentemilla at Fab Lab Barcelona.
+
+D3 C4 P4 – v1.0 (AI acted as Driver in Coding / Programming and Prototyping / Making. AI acted as Co-Creator in Design. All other phases were fully human-led.)
 
