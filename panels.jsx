@@ -160,7 +160,7 @@ function TagDropdown({ label, options, selected, onToggle, color = '#1a1409' }) 
   );
 }
 
-function Toolbar({ projects, people, clusters, filters, setFilters, searchQuery, setSearchQuery, stats, groupMode, setGroupMode }) {
+function Toolbar({ projects, people, clusters, filters, setFilters, searchQuery, setSearchQuery, stats, groupMode, setGroupMode, viewMode, setViewMode, connectionMode, setConnectionMode }) {
   const allYears = [...new Set(projects.map(p => p.year))].sort((a, b) => b - a);
   const clusterKeys = Object.keys(clusters);
 
@@ -293,6 +293,37 @@ function Toolbar({ projects, people, clusters, filters, setFilters, searchQuery,
             onToggle={(v) => toggleSet('weakSignals', v)}
           />
         </div>
+        {setViewMode && (
+          <div className="filter-group">
+            <div className="filter-label">Show</div>
+            {[
+              { id: 'both', label: 'Both' },
+              { id: 'projects', label: 'Projects' },
+              { id: 'students', label: 'Students' },
+            ].map(m => (
+              <button key={m.id}
+                className={'chip' + (viewMode === m.id ? ' on' : '')}
+                onClick={() => setViewMode(m.id)}
+              >{m.label}</button>
+            ))}
+          </div>
+        )}
+        {setConnectionMode && (
+          <div className="filter-group">
+            <div className="filter-label">Connections</div>
+            {[
+              { id: 'project-author', label: 'Project ↔ author' },
+              { id: 'project-project', label: 'Project ↔ project' },
+              { id: 'student-student', label: 'Student ↔ student' },
+              { id: 'none', label: 'None' },
+            ].map(m => (
+              <button key={m.id}
+                className={'chip' + (connectionMode === m.id ? ' on' : '')}
+                onClick={() => setConnectionMode(m.id)}
+              >{m.label}</button>
+            ))}
+          </div>
+        )}
         {setGroupMode && (
           <div className="filter-group" style={{ marginLeft: 'auto' }}>
             <div className="filter-label">Cluster by</div>

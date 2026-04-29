@@ -515,8 +515,7 @@ const { useState, useEffect, useMemo } = React;
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "showIntro": true,
-  "showConnections": true,
-  "nodeScale": 1.0
+  "nodeScale": 1.05
 }/*EDITMODE-END*/;
 
 function App() {
@@ -527,6 +526,8 @@ function App() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [groupMode, setGroupMode] = useState('year');
+  const [viewMode, setViewMode] = useState('both'); // 'both' | 'projects' | 'students'
+  const [connectionMode, setConnectionMode] = useState('project-author'); // 'project-author' | 'project-project' | 'student-student' | 'none'
   const [hoverPersonId, setHoverPersonId] = useState(null);
   const [activePersonId, setActivePersonId] = useState(null);
   const [tweaks, setTweaks] = useState(() => {
@@ -577,6 +578,8 @@ function App() {
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         stats={stats}
         groupMode={groupMode} setGroupMode={setGroupMode}
+        viewMode={viewMode} setViewMode={setViewMode}
+        connectionMode={connectionMode} setConnectionMode={setConnectionMode}
       />
 
       {tweaks.showIntro && !selectedProject && !searchQuery && !activePersonId && !hoverPersonId && filters.years.size === 0 && filters.clusters.size === 0 && (
@@ -598,8 +601,9 @@ function App() {
         setActivePersonId={setActivePersonId}
         groupMode={groupMode}
         setSelectedPerson={setSelectedPerson}
-        showConnections={tweaks.showConnections !== false}
         nodeScale={tweaks.nodeScale ?? 1}
+        viewMode={viewMode}
+        connectionMode={connectionMode}
       />
 
       <Hints
@@ -707,13 +711,6 @@ function TweaksPanel({ tweaks, setTweakKey, onClose }) {
           <div className="control">
             <div className={'tweak-toggle' + (tweaks.showIntro ? ' on' : '')}
               onClick={() => setTweakKey('showIntro', !tweaks.showIntro)} />
-          </div>
-        </div>
-        <div className="tweak-row">
-          <label>Show connections</label>
-          <div className="control">
-            <div className={'tweak-toggle' + (tweaks.showConnections ? ' on' : '')}
-              onClick={() => setTweakKey('showConnections', !tweaks.showConnections)} />
           </div>
         </div>
         <div className="tweak-row">

@@ -183,9 +183,16 @@ function Graph({
   activePersonId, setActivePersonId,
   groupMode = 'year',
   setSelectedPerson = () => {},
-  showConnections = true,
   nodeScale = 1,
+  viewMode = 'both',
+  connectionMode = 'project-author',
 }) {
+  // Derived booleans from view/connection modes
+  const showStudents = viewMode !== 'projects';
+  const showProjects = viewMode !== 'students';
+  const showConnections = connectionMode !== 'none';
+  const personConnections = connectionMode === 'project-project';
+  const studentConnections = connectionMode === 'student-student';
   const containerRef = uR(null);
   const simRef = uR(null);
   const rafRef = uR(null);
@@ -470,11 +477,13 @@ function Graph({
               >{k}</text>
             );
           })}
-          {/* Edges */}
-          {showConnections && sim.edges.map((e, i) => {
+          {/* Project ↔ Author edges (default) */}
+          {connectionMode === 'project-author' && sim.edges.map((e, i) => {
             const a = e.source, b = e.target;
             if (a.type === 'project' && !visibility.visibleProjectIds.has(a.ref.id)) return null;
             if (b.type === 'project' && !visibility.visibleProjectIds.has(b.ref.id)) return null;
+            // Hide person-incident edges when students are hidden
+            if (!showStudents && (a.type === 'person' || b.type === 'person')) return null;
             const hl = highlight.nodeIds;
             const isActive = hl && hl.has(a.id) && hl.has(b.id);
             const anyHl = !!hl;
@@ -490,9 +499,94 @@ function Graph({
             );
           })}
 
+          {/* Project-to-project edges (shared author) */}
+          {connectionMode === 'project-project' && (() => {
+            const lines = [];
+            const projNodes = sim.nodes.filter(n => n.type === 'project' && visibility.visibleProjectIds.has(n.ref.id));
+            const byId = new Map(projNodes.map(n => [n.ref.id, n]));
+            const seen = new Set();
+            for (const a of projNodes) {
+              for (const b of projNodes) {
+                if (a.ref.id >= b.ref.id) continue;
+                const shared = a.ref.authors.filter(x => b.ref.authors.includes(x));
+                if (!shared.length) continue;
+                const key = a.ref.id + '|' + b.ref.id;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const hl = highlight.nodeIds;
+                const aId = 'proj:' + a.ref.id, bId = 'proj:' + b.ref.id;
+                const isActive = hl && hl.has(aId) && hl.has(bId);
+                const anyHl = !!hl;
+                // Curved path (gentle arc)
+                const mx = (a.x + b.x) / 2;
+                const my = (a.y + b.y) / 2;
+                const dx = b.x - a.x, dy = b.y - a.y;
+                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                const off = Math.min(60, len * 0.12);
+                const cx = mx + (-dy / len) * off;
+                const cy = my + (dx / len) * off;
+                lines.push(
+                  <path key={key}
+                    d={`M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`}
+                    fill="none"
+                    stroke={isActive ? '#b84a1f' : '#6b6459'}
+                    strokeWidth={isActive ? 1.4 : 0.6}
+                    strokeOpacity={isActive ? 0.9 : (anyHl ? 0.06 : 0.4)}
+                    style={{ transition: 'stroke-opacity 0.15s, stroke-width 0.15s' }}
+                  />
+                );
+              }
+            }
+            return lines;
+          })()}
+
+          {/* Student ↔ Student edges (co-authors of a project) */}
+          {connectionMode === 'student-student' && (() => {
+            const lines = [];
+            const personNodes = sim.nodes.filter(n => n.type === 'person');
+            const byId = new Map(personNodes.map(n => [n.ref.id, n]));
+            const seen = new Set();
+            for (const proj of projects) {
+              if (!visibility.visibleProjectIds.has(proj.id)) continue;
+              const auths = proj.authors || [];
+              for (let i = 0; i < auths.length; i++) {
+                for (let j = i + 1; j < auths.length; j++) {
+                  const a = byId.get(auths[i]);
+                  const b = byId.get(auths[j]);
+                  if (!a || !b) continue;
+                  const key = a.ref.id < b.ref.id ? a.ref.id + '|' + b.ref.id : b.ref.id + '|' + a.ref.id;
+                  if (seen.has(key)) continue;
+                  seen.add(key);
+                  const hl = highlight.nodeIds;
+                  const isActive = hl && hl.has(a.id) && hl.has(b.id);
+                  const anyHl = !!hl;
+                  const mx = (a.x + b.x) / 2;
+                  const my = (a.y + b.y) / 2;
+                  const dx = b.x - a.x, dy = b.y - a.y;
+                  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                  const off = Math.min(60, len * 0.12);
+                  const cx = mx + (-dy / len) * off;
+                  const cy = my + (dx / len) * off;
+                  lines.push(
+                    <path key={key}
+                      d={`M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`}
+                      fill="none"
+                      stroke={isActive ? '#b84a1f' : '#6b6459'}
+                      strokeWidth={isActive ? 1.4 : 0.6}
+                      strokeOpacity={isActive ? 0.9 : (anyHl ? 0.06 : 0.4)}
+                      style={{ transition: 'stroke-opacity 0.15s, stroke-width 0.15s' }}
+                    />
+                  );
+                }
+              }
+            }
+            return lines;
+          })()}
+
           {/* Nodes */}
           {sim.nodes.map(n => {
-            if (n.type === 'project' && !visibility.visibleProjectIds.has(n.ref.id)) return null;
+            if (n.type === 'project' && (!showProjects || !visibility.visibleProjectIds.has(n.ref.id))) return null;
+            if (n.type === 'person' && !showStudents) return null;
 
             const hl = highlight.nodeIds;
             const inHl = !hl || hl.has(n.id);
