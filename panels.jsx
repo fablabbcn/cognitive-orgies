@@ -160,7 +160,7 @@ function TagDropdown({ label, options, selected, onToggle, color = '#1a1409' }) 
   );
 }
 
-function Toolbar({ projects, people, clusters, filters, setFilters, searchQuery, setSearchQuery, stats, groupMode, setGroupMode, viewMode, setViewMode, connectionMode, setConnectionMode }) {
+function Toolbar({ projects, people, clusters, filters, setFilters, searchQuery, setSearchQuery, stats, groupMode, setGroupMode, viewMode, setViewMode }) {
   const allYears = [...new Set(projects.map(p => p.year))].sort((a, b) => b - a);
   const clusterKeys = Object.keys(clusters);
 
@@ -238,24 +238,6 @@ function Toolbar({ projects, people, clusters, filters, setFilters, searchQuery,
 
       <div className="filter-bar">
         <div className="filter-group">
-          <div className="filter-label">Cluster</div>
-          {clusterKeys.map(k => {
-            const c = clusters[k];
-            const active = filters.clusters.has(k);
-            return (
-              <button
-                key={k}
-                className={'chip' + (active ? ' on' : '')}
-                style={active ? { borderColor: c.color, color: c.color } : {}}
-                onClick={() => toggleCluster(k)}
-              >
-                <span className="dot" style={{ background: c.color }} />
-                {c.name}
-              </button>
-            );
-          })}
-        </div>
-        <div className="filter-group">
           <div className="filter-label">Year</div>
           {allYears.map(y => {
             const active = filters.years.has(y);
@@ -308,28 +290,11 @@ function Toolbar({ projects, people, clusters, filters, setFilters, searchQuery,
             ))}
           </div>
         )}
-        {setConnectionMode && (
-          <div className="filter-group">
-            <div className="filter-label">Connections</div>
-            {[
-              { id: 'project-author', label: 'Project ↔ author' },
-              { id: 'project-project', label: 'Project ↔ project' },
-              { id: 'student-student', label: 'Student ↔ student' },
-              { id: 'none', label: 'None' },
-            ].map(m => (
-              <button key={m.id}
-                className={'chip' + (connectionMode === m.id ? ' on' : '')}
-                onClick={() => setConnectionMode(m.id)}
-              >{m.label}</button>
-            ))}
-          </div>
-        )}
         {setGroupMode && (
           <div className="filter-group" style={{ marginLeft: 'auto' }}>
             <div className="filter-label">Cluster by</div>
             {[
               { id: 'year', label: 'Year' },
-              { id: 'mc', label: 'Microchallenge' },
               { id: 'area', label: 'Area' },
               { id: 'photo', label: 'Photo' },
               { id: 'free', label: 'Free' },
@@ -446,7 +411,6 @@ function PersonProfile({ person, projects, people, clusters, onClose, onSelectPr
 function GroupModeSwitcher({ mode, setMode }) {
   const modes = [
     { id: 'year', label: 'Year' },
-    { id: 'mc', label: 'Microchallenge' },
     { id: 'area', label: 'Area' },
     { id: 'photo', label: 'Photo' },
     { id: 'free', label: 'Free' },

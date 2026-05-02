@@ -514,20 +514,22 @@
 const { useState, useEffect, useMemo } = React;
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "showIntro": true,
-  "nodeScale": 1.05
+  "showIntro": false,
+  "nodeScale": 1.15
 }/*EDITMODE-END*/;
 
 function App() {
   const { projects, people, clusters } = window.MDEF_DATA;
-
   const [filters, setFilters] = useState({ years: new Set(), clusters: new Set(), areas: new Set(), weakSignals: new Set() });
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [groupMode, setGroupMode] = useState('year');
   const [viewMode, setViewMode] = useState('both'); // 'both' | 'projects' | 'students'
-  const [connectionMode, setConnectionMode] = useState('project-author'); // 'project-author' | 'project-project' | 'student-student' | 'none'
+  // connectionMode auto-derives from viewMode
+  const connectionMode = viewMode === 'projects' ? 'project-project'
+                       : viewMode === 'students' ? 'student-student'
+                       : 'project-author';
   const [hoverPersonId, setHoverPersonId] = useState(null);
   const [activePersonId, setActivePersonId] = useState(null);
   const [tweaks, setTweaks] = useState(() => {
@@ -579,7 +581,6 @@ function App() {
         stats={stats}
         groupMode={groupMode} setGroupMode={setGroupMode}
         viewMode={viewMode} setViewMode={setViewMode}
-        connectionMode={connectionMode} setConnectionMode={setConnectionMode}
       />
 
       {tweaks.showIntro && !selectedProject && !searchQuery && !activePersonId && !hoverPersonId && filters.years.size === 0 && filters.clusters.size === 0 && (
