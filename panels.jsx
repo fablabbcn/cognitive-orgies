@@ -294,10 +294,11 @@ function Toolbar({ projects, people, clusters, filters, setFilters, searchQuery,
           <div className="filter-group" style={{ marginLeft: 'auto' }}>
             <div className="filter-label">Cluster by</div>
             {[
+              { id: 'free', label: 'Free' },
+              { id: 'grid', label: 'Grid' },
               { id: 'year', label: 'Year' },
               { id: 'area', label: 'Area' },
               { id: 'photo', label: 'Photo' },
-              { id: 'free', label: 'Free' },
             ].map(m => (
               <button key={m.id}
                 className={'chip' + (groupMode === m.id ? ' on' : '')}

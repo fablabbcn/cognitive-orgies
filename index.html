@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Cognitive legacy</title>
+<title>MDEF Archive — 5 years</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -496,6 +496,116 @@
     line-height: 1.5; margin: 0;
     text-wrap: pretty;
   }
+
+  /* === Mobile responsive === */
+  @media (max-width: 860px) {
+    body { font-size: 13px; }
+
+    /* Toolbar: stack vertically, reduce padding */
+    .toolbar {
+      grid-template-columns: 1fr;
+      gap: 10px;
+      padding: 10px 12px 0 12px;
+    }
+    .tb-left, .tb-center, .tb-right { justify-self: stretch; }
+    .tb-left .brand { justify-content: flex-start; }
+    .brand-mark { width: 28px; height: 28px; font-size: 14px; }
+    .brand-title { font-size: 15px; }
+    .brand-sub { font-size: 10px; }
+    .search-wrap { width: 100%; padding: 7px 12px; }
+    .search-wrap input { font-size: 14px; }  /* prevents iOS zoom on focus */
+    .tb-right { display: none; } /* hide zoom buttons — pinch-zoom works on touch */
+
+    /* Filter bar: scroll horizontally to avoid stacking too tall */
+    .filter-bar {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      gap: 12px;
+      padding-bottom: 6px;
+      margin-top: 8px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+    .filter-bar::-webkit-scrollbar { height: 3px; }
+    .filter-bar::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+    .filter-group { flex-wrap: nowrap; flex-shrink: 0; }
+    .chip { padding: 6px 11px; font-size: 12px; }
+    .chip-clear { display: none; }
+
+    /* Dropdowns: full width within viewport */
+    .tag-dd-pop {
+      width: min(280px, calc(100vw - 24px));
+      max-height: 50vh;
+    }
+
+    /* Detail panel: bottom sheet */
+    .detail-panel {
+      top: auto; left: 0; right: 0; bottom: 0;
+      width: 100%;
+      max-height: 85vh;
+      border-left: 0;
+      border-top: 1px solid var(--line);
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      padding: 18px 20px 32px 20px;
+      animation: slideUp 0.32s cubic-bezier(0.2, 0.9, 0.3, 1);
+      box-shadow: 0 -16px 40px -20px rgba(24,18,10,0.22);
+    }
+    /* drag handle */
+    .detail-panel::before {
+      content: ''; display: block;
+      width: 36px; height: 4px; border-radius: 2px;
+      background: var(--line);
+      margin: -6px auto 12px auto;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(40px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .detail-title { font-size: 28px; }
+    .detail-summary { font-size: 13.5px; }
+    .detail-photo img { max-height: 200px; }
+
+    /* Intro: smaller, repositioned */
+    .intro {
+      top: auto; bottom: 80px; left: 12px; right: 12px;
+      max-width: none;
+      padding: 16px;
+      background: linear-gradient(to bottom right, rgba(247,243,233,0.96) 60%, rgba(247,243,233,0.6));
+      border-radius: 8px;
+    }
+    .intro h1 { font-size: 34px; }
+    .intro p { font-size: 12.5px; }
+
+    /* Hints + footer: minimize */
+    .hints {
+      bottom: 10px;
+      font-size: 11px;
+      padding: 6px 12px;
+      max-width: calc(100vw - 24px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .footer-credit { display: none; }
+
+    /* Tweaks panel: full-width sheet from bottom */
+    .tweaks {
+      left: 12px !important; right: 12px !important; top: auto !important;
+      bottom: 60px !important;
+      width: auto !important;
+    }
+    .tweaks-fab { bottom: 12px; left: 12px; width: 42px; height: 42px; }
+  }
+
+  /* Very small phones */
+  @media (max-width: 420px) {
+    .brand-sub { display: none; }
+    .toolbar { padding: 8px 10px 0 10px; }
+    .detail-title { font-size: 24px; }
+    .intro h1 { font-size: 28px; }
+  }
 </style>
 
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
@@ -524,7 +634,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedPerson, setSelectedPerson] = useState(null);
-  const [groupMode, setGroupMode] = useState('year');
+  const [groupMode, setGroupMode] = useState('free');
   const [viewMode, setViewMode] = useState('both'); // 'both' | 'projects' | 'students'
   // connectionMode auto-derives from viewMode
   const connectionMode = viewMode === 'projects' ? 'project-project'

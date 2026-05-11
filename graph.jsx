@@ -120,16 +120,18 @@ function stepSimulation(sim, params) {
     n.vy -= n.y * centerStrength;
   });
 
-  // Grouping pull — clusters projects toward "anchor" points based on chosen mode
+  // Grouping pull — clusters projects AND people toward "anchor" points based on chosen mode
   if (params.groupAnchors) {
     nodes.forEach(n => {
       if (n.pinned) return;
-      if (n.type !== 'project') return;
-      const anchor = params.groupAnchors(n.ref);
+      // groupAnchors accepts both project ref and person ref via .personKey
+      const anchor = params.groupAnchors(n.ref, n.type);
       if (!anchor) return;
       const pull = params.groupPull ?? 0.018;
-      n.vx += (anchor.x - n.x) * pull;
-      n.vy += (anchor.y - n.y) * pull;
+      // people get a softer pull so they don't crowd anchor centers
+      const k = n.type === 'person' ? pull * 0.6 : pull;
+      n.vx += (anchor.x - n.x) * k;
+      n.vy += (anchor.y - n.y) * k;
     });
   }
 
@@ -225,6 +227,46 @@ function Graph({
   const groupAnchorsFn = uM(() => {
     if (groupMode === 'free') return null;
 
+    // GRID mode: each project gets its own slot in a regular reticule.
+    if (groupMode === 'grid') {
+      const sorted = [...projects].sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return (a.cluster || '').localeCompare(b.cluster || '') || a.title.localeCompare(b.title);
+      });
+      const N = sorted.length;
+      const cols = Math.max(8, Math.ceil(Math.sqrt(N * 1.6)));
+      const CELL = 84;
+      const slots = new Map();
+      sorted.forEach((p, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        slots.set(p.id, {
+          x: (col - (cols - 1) / 2) * CELL,
+          y: (row - (Math.ceil(N / cols) - 1) / 2) * CELL,
+          label: '',
+        });
+      });
+      // Person → centroid of their projects
+      const personMap = new Map();
+      projects.forEach(p => (p.authors || []).forEach(aid => {
+        if (!personMap.has(aid)) personMap.set(aid, []);
+        personMap.get(aid).push(p.id);
+      }));
+      const fn = (ref, type) => {
+        if (type === 'person') {
+          const ids = personMap.get(ref.id) || [];
+          if (!ids.length) return null;
+          let sx = 0, sy = 0, n = 0;
+          ids.forEach(id => { const s = slots.get(id); if (s) { sx += s.x; sy += s.y; n++; } });
+          return n ? { x: sx / n, y: sy / n + 40 } : null;
+        }
+        return slots.get(ref.id);
+      };
+      fn.anchors = new Map();
+      fn.keys = [];
+      return fn;
+    }
+
     // Determine groups + their canonical key per project
     const projKey = (p) => {
       if (groupMode === 'year') return String(p.year);
@@ -274,8 +316,34 @@ function Graph({
       });
     }
 
-    const fn = (proj) => {
-      let k = projKey(proj);
+    // Pre-compute person→projects for grouping
+    const personProjMap = new Map();
+    projects.forEach(p => {
+      (p.authors || []).forEach(aid => {
+        if (!personProjMap.has(aid)) personProjMap.set(aid, []);
+        personProjMap.get(aid).push(p);
+      });
+    });
+
+    const fn = (ref, type) => {
+      if (type === 'person') {
+        // Person: derive key from majority of their projects
+        const myProj = personProjMap.get(ref.id) || [];
+        if (myProj.length === 0) return null;
+        const counts = new Map();
+        myProj.forEach(p => {
+          const k = projKey(p);
+          if (k) counts.set(k, (counts.get(k) || 0) + 1);
+        });
+        let bestK = null, bestC = -1;
+        counts.forEach((c, k) => { if (c > bestC) { bestK = k; bestC = c; } });
+        if (groupMode === 'area' && !anchors.has(bestK)) bestK = 'Other';
+        const a = anchors.get(bestK);
+        if (!a) return null;
+        return a;
+      }
+      // project
+      let k = projKey(ref);
       if (groupMode === 'area' && !anchors.has(k)) k = 'Other';
       return anchors.get(k);
     };
@@ -293,15 +361,19 @@ function Graph({
       if (!running) return;
       const sim = simRef.current;
       if (sim) {
-        const focusId = selectedProject ? 'proj:' + selectedProject.id : null;
+        // No focusId in simulation: selecting a project/person should NOT
+        // pull it to the center or rearrange the graph — selection is purely
+        // visual + the side panel. The user keeps their spatial context.
         sim.nodes.forEach(n => {
-          if (focusId !== n.id) n.pinned = false;
+          if (!dragRef.current.node || dragRef.current.node !== n) n.pinned = false;
         });
         const ke = stepSimulation(sim, {
-          focusId,
-          linkDistance: focusId ? 120 : 95,
+          focusId: null,
+          linkDistance: 95,
           groupAnchors: groupAnchorsFn,
-          groupPull: focusId ? 0.005 : 0.022,
+          groupPull: groupMode === 'grid' ? 0.14 : 0.022,
+          repulsion: groupMode === 'grid' ? 200 : undefined,
+          centerStrength: groupMode === 'grid' ? 0 : undefined,
         });
         // Render at most every 33 ms (≈30 fps)
         if (ts - lastTick > 33) {
@@ -344,7 +416,23 @@ function Graph({
       }
       visibleProjectIds.add(p.id);
     });
-    return { visibleProjectIds };
+    // Build person→projects map from project authors
+    const personProjects = new Map();
+    projects.forEach(p => {
+      (p.authors || []).forEach(aid => {
+        if (!personProjects.has(aid)) personProjects.set(aid, []);
+        personProjects.get(aid).push(p.id);
+      });
+    });
+    // Person visible if at least one of their projects is visible (or name matches search)
+    const visiblePersonIds = new Set();
+    people.forEach(pe => {
+      const myProjs = personProjects.get(pe.id) || [];
+      const hasVisible = myProjs.some(pid => visibleProjectIds.has(pid));
+      if (hasVisible) visiblePersonIds.add(pe.id);
+      else if (q && pe.name.toLowerCase().includes(q)) visiblePersonIds.add(pe.id);
+    });
+    return { visibleProjectIds, visiblePersonIds };
   }, [projects, people, filters, searchQuery]);
 
   // Compute highlight from hover/pinned person or selected project
@@ -358,8 +446,17 @@ function Graph({
     if (!sourceId) return { nodeIds: null, edgeKeys: null };
     const nb = sim.neighbors.get(sourceId) || new Set();
     const nodeIds = new Set([sourceId, ...nb]);
-    // include 2-hop for project focus
+    // include 2-hop for project focus → reach co-authors' other projects
     if (focusNodeId && !personNodeId) {
+      const twoHop = new Set(nodeIds);
+      nb.forEach(nid => {
+        const secondHop = sim.neighbors.get(nid) || new Set();
+        secondHop.forEach(x => twoHop.add(x));
+      });
+      return { nodeIds: twoHop, edgeKeys: null };
+    }
+    // For person focus → also include 2-hop co-students (students who share a project)
+    if (personNodeId) {
       const twoHop = new Set(nodeIds);
       nb.forEach(nid => {
         const secondHop = sim.neighbors.get(nid) || new Set();
@@ -424,6 +521,62 @@ function Graph({
     if (!node) return;
     node.addEventListener('wheel', onWheel, { passive: false });
     return () => node.removeEventListener('wheel', onWheel);
+  }, [viewSize, transform]);
+
+  // Touch: single-finger pan + two-finger pinch zoom
+  const touchRef = uR({ mode: null, startX: 0, startY: 0, origX: 0, origY: 0, origK: 1, startDist: 0, startMidX: 0, startMidY: 0 });
+  uE(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    const onTouchStart = (e) => {
+      if (e.target.closest('.node')) return;
+      const rect = node.getBoundingClientRect();
+      if (e.touches.length === 1) {
+        const t = e.touches[0];
+        touchRef.current = { mode: 'pan', startX: t.clientX, startY: t.clientY, origX: transform.x, origY: transform.y };
+      } else if (e.touches.length === 2) {
+        const [a, b] = e.touches;
+        const dx = b.clientX - a.clientX, dy = b.clientY - a.clientY;
+        const dist = Math.hypot(dx, dy);
+        const mx = (a.clientX + b.clientX) / 2 - rect.left - viewSize.w / 2;
+        const my = (a.clientY + b.clientY) / 2 - rect.top - viewSize.h / 2;
+        touchRef.current = { mode: 'pinch', startDist: dist, origK: transform.k, origX: transform.x, origY: transform.y, startMidX: mx, startMidY: my };
+        e.preventDefault();
+      }
+    };
+    const onTouchMove = (e) => {
+      const tr = touchRef.current;
+      if (tr.mode === 'pan' && e.touches.length === 1) {
+        const t = e.touches[0];
+        const dx = t.clientX - tr.startX;
+        const dy = t.clientY - tr.startY;
+        setTransform(curr => ({ ...curr, x: tr.origX + dx, y: tr.origY + dy }));
+        e.preventDefault();
+      } else if (tr.mode === 'pinch' && e.touches.length === 2) {
+        const [a, b] = e.touches;
+        const dist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+        const factor = dist / tr.startDist;
+        const nk = Math.max(0.18, Math.min(2.5, tr.origK * factor));
+        const f = nk / tr.origK;
+        setTransform({
+          k: nk,
+          x: tr.startMidX - (tr.startMidX - tr.origX) * f,
+          y: tr.startMidY - (tr.startMidY - tr.origY) * f,
+        });
+        e.preventDefault();
+      }
+    };
+    const onTouchEnd = () => { touchRef.current.mode = null; };
+    node.addEventListener('touchstart', onTouchStart, { passive: false });
+    node.addEventListener('touchmove', onTouchMove, { passive: false });
+    node.addEventListener('touchend', onTouchEnd);
+    node.addEventListener('touchcancel', onTouchEnd);
+    return () => {
+      node.removeEventListener('touchstart', onTouchStart);
+      node.removeEventListener('touchmove', onTouchMove);
+      node.removeEventListener('touchend', onTouchEnd);
+      node.removeEventListener('touchcancel', onTouchEnd);
+    };
   }, [viewSize, transform]);
 
   // Expose zoom controls
@@ -543,12 +696,12 @@ function Graph({
           {/* Student ↔ Student edges (co-authors of a project) */}
           {connectionMode === 'student-student' && (() => {
             const lines = [];
-            const personNodes = sim.nodes.filter(n => n.type === 'person');
+            const personNodes = sim.nodes.filter(n => n.type === 'person' && visibility.visiblePersonIds.has(n.ref.id));
             const byId = new Map(personNodes.map(n => [n.ref.id, n]));
             const seen = new Set();
             for (const proj of projects) {
               if (!visibility.visibleProjectIds.has(proj.id)) continue;
-              const auths = proj.authors || [];
+              const auths = (proj.authors || []).filter(aid => visibility.visiblePersonIds.has(aid));
               for (let i = 0; i < auths.length; i++) {
                 for (let j = i + 1; j < auths.length; j++) {
                   const a = byId.get(auths[i]);
@@ -586,7 +739,7 @@ function Graph({
           {/* Nodes */}
           {sim.nodes.map(n => {
             if (n.type === 'project' && (!showProjects || !visibility.visibleProjectIds.has(n.ref.id))) return null;
-            if (n.type === 'person' && !showStudents) return null;
+            if (n.type === 'person' && (!showStudents || !visibility.visiblePersonIds.has(n.ref.id))) return null;
 
             const hl = highlight.nodeIds;
             const inHl = !hl || hl.has(n.id);
