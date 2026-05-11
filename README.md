@@ -128,4 +128,3 @@ This project is licensed under the CC BY-NC-SA 4.0 — the Creative Commons Attr
 Original concept and design by Santi Fuentemilla at Fab Lab Barcelona.
 
 D3 C4 P4 – v1.0 (AI acted as Driver in Coding / Programming and Prototyping / Making. AI acted as Co-Creator in Design. All other phases were fully human-led.)
-
