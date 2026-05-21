@@ -32,6 +32,33 @@
 
   function canonName(n) { return (n || '').replace(/\s+/g, ' ').trim(); }
 
+  // Normalize URLs that point to a repo *page* showing an image, so the
+  // <img> tag actually receives image bytes. Currently handles:
+  //   github.com/OWNER/REPO/blob/REF/PATH  → raw.githubusercontent.com/OWNER/REPO/REF/PATH
+  //   gitlab.com/OWNER/REPO/-/blob/REF/PATH → gitlab.com/OWNER/REPO/-/raw/REF/PATH
+  // Leaves already-raw URLs, gists, and other hosts untouched.
+  function normalizeImageUrl(url) {
+    if (!url) return url;
+    const u = url.trim();
+    // github.com blob → raw.githubusercontent.com
+    let m = u.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/i);
+    if (m) return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}`;
+    // gitlab.com /-/blob/ → /-/raw/
+    m = u.match(/^(https?:\/\/gitlab\.com\/.+?)\/-\/blob\/(.+)$/i);
+    if (m) return `${m[1]}/-/raw/${m[2]}`;
+    // GitHub's camo image proxy hex-encodes the original URL after the SHA-1 segment.
+    // Only the camo origin (with a github.com referer) can fetch them, so we decode
+    // back to the source URL instead.
+    m = u.match(/^https?:\/\/camo\.githubusercontent\.com\/[a-f0-9]+\/([a-f0-9]+)$/i);
+    if (m && m[1].length % 2 === 0) {
+      try {
+        const decoded = m[1].match(/../g).map(h => String.fromCharCode(parseInt(h, 16))).join('');
+        if (/^https?:\/\//i.test(decoded)) return decoded;
+      } catch (e) { /* fall through */ }
+    }
+    return u;
+  }
+
   function setStatus(text) {
     const el = document.getElementById('mdef-status');
     if (el) el.textContent = text;
@@ -79,7 +106,7 @@
     studentRows.forEach(r => {
       const name = canonName(r.name);
       if (!name) return;
-      studentDir.set(name.toLowerCase(), { bio: (r.bio || '').trim(), photo: (r.photo || '').trim() });
+      studentDir.set(name.toLowerCase(), { bio: (r.bio || '').trim(), photo: normalizeImageUrl((r.photo || '').trim()) });
     });
 
     projRows.forEach(p => {
@@ -122,7 +149,7 @@
         areas,
         weakSignals,
         knowledge,
-        photo: (p.photo || '').trim(),
+        photo: normalizeImageUrl((p.photo || '').trim()),
         link: (p.link || '').trim(),
       };
     }).filter(p => p.title);

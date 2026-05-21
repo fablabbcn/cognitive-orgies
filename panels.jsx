@@ -160,7 +160,7 @@ function TagDropdown({ label, options, selected, onToggle, color = '#1a1409' }) 
   );
 }
 
-function Toolbar({ projects, people, clusters, filters, setFilters, searchQuery, setSearchQuery, stats, groupMode, setGroupMode, viewMode, setViewMode }) {
+function Toolbar({ projects, people, clusters, filters, setFilters, searchQuery, setSearchQuery, stats, groupMode, setGroupMode, viewMode, setViewMode, connectBy, setConnectBy }) {
   const allYears = [...new Set(projects.map(p => p.year))].sort((a, b) => b - a);
   const clusterKeys = Object.keys(clusters);
 
@@ -286,6 +286,21 @@ function Toolbar({ projects, people, clusters, filters, setFilters, searchQuery,
               <button key={m.id}
                 className={'chip' + (viewMode === m.id ? ' on' : '')}
                 onClick={() => setViewMode(m.id)}
+              >{m.label}</button>
+            ))}
+          </div>
+        )}
+        {setConnectBy && viewMode === 'projects' && (
+          <div className="filter-group">
+            <div className="filter-label">Connect by</div>
+            {[
+              { id: 'author', label: 'Author' },
+              { id: 'area', label: 'Area' },
+              { id: 'weakSignal', label: 'Weak signal' },
+            ].map(m => (
+              <button key={m.id}
+                className={'chip' + (connectBy === m.id ? ' on' : '')}
+                onClick={() => setConnectBy(m.id)}
               >{m.label}</button>
             ))}
           </div>

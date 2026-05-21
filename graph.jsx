@@ -188,6 +188,7 @@ function Graph({
   nodeScale = 1,
   viewMode = 'both',
   connectionMode = 'project-author',
+  connectBy = 'author',
 }) {
   // Derived booleans from view/connection modes
   const showStudents = viewMode !== 'projects';
@@ -235,7 +236,11 @@ function Graph({
       });
       const N = sorted.length;
       const cols = Math.max(8, Math.ceil(Math.sqrt(N * 1.6)));
-      const CELL = 84;
+      // Cell size must accommodate the widest project node + a gap, so images
+      // never overlap regardless of nodeScale (collab images render at 64*scale).
+      const maxW = 64 * nodeScale;
+      const GAP = 22;
+      const CELL = Math.max(84, Math.ceil(maxW + GAP));
       const slots = new Map();
       sorted.forEach((p, i) => {
         const col = i % cols;
@@ -350,7 +355,7 @@ function Graph({
     fn.anchors = anchors;
     fn.keys = keys;
     return fn;
-  }, [groupMode, projects]);
+  }, [groupMode, projects, nodeScale]);
 
   // Animation loop — runs at ~30 fps when active, pauses when sim settles
   uE(() => {
@@ -367,6 +372,19 @@ function Graph({
         sim.nodes.forEach(n => {
           if (!dragRef.current.node || dragRef.current.node !== n) n.pinned = false;
         });
+        // Chess-board grid: snap project nodes to their exact slot every frame
+        // and pin them so repulsion / link springs can't push them around.
+        // Person nodes stay free so they can drift toward their author centroid.
+        if (groupMode === 'grid' && groupAnchorsFn) {
+          sim.nodes.forEach(n => {
+            if (n.type !== 'project') return;
+            if (dragRef.current.node === n) return;
+            const a = groupAnchorsFn(n.ref, 'project');
+            if (!a) return;
+            n.x = a.x; n.y = a.y; n.vx = 0; n.vy = 0;
+            n.pinned = true;
+          });
+        }
         const ke = stepSimulation(sim, {
           focusId: null,
           linkDistance: 95,
@@ -442,8 +460,50 @@ function Graph({
     const focusNodeId = selectedProject ? 'proj:' + selectedProject.id : null;
     const personId = hoverPersonId || activePersonId;
     const personNodeId = personId ? 'pers:' + personId : null;
+
+    // Special case: project view + project selected → highlight by current "connect by" dimension
+    if (connectionMode === 'project-project' && focusNodeId && !personNodeId) {
+      const fieldKey = connectBy === 'area' ? 'areas'
+                     : connectBy === 'weakSignal' ? 'weakSignals'
+                     : 'authors';
+      const mine = selectedProject[fieldKey] || [];
+      const set = new Set([focusNodeId]);
+      if (mine.length) {
+        for (const p of projects) {
+          if (p.id === selectedProject.id) continue;
+          const theirs = p[fieldKey] || [];
+          if (theirs.some(x => mine.includes(x))) set.add('proj:' + p.id);
+        }
+      }
+      return { nodeIds: set, edgeKeys: null };
+    }
+
     const sourceId = personNodeId || focusNodeId;
-    if (!sourceId) return { nodeIds: null, edgeKeys: null };
+    if (!sourceId) {
+      // No focus: in project-project mode, dim projects that have NO connection in current dimension
+      if (connectionMode === 'project-project') {
+        const fieldKey = connectBy === 'area' ? 'areas'
+                       : connectBy === 'weakSignal' ? 'weakSignals'
+                       : 'authors';
+        const connected = new Set();
+        for (let i = 0; i < projects.length; i++) {
+          for (let j = i + 1; j < projects.length; j++) {
+            const a = projects[i], b = projects[j];
+            const aS = a[fieldKey] || [], bS = b[fieldKey] || [];
+            if (!aS.length || !bS.length) continue;
+            if (aS.some(x => bS.includes(x))) {
+              connected.add('proj:' + a.id);
+              connected.add('proj:' + b.id);
+            }
+          }
+        }
+        // Only dim if there ARE orphans; if all are connected, no need to highlight
+        if (connected.size && connected.size < projects.length) {
+          return { nodeIds: connected, edgeKeys: null, soft: true };
+        }
+      }
+      return { nodeIds: null, edgeKeys: null };
+    }
     const nb = sim.neighbors.get(sourceId) || new Set();
     const nodeIds = new Set([sourceId, ...nb]);
     // include 2-hop for project focus → reach co-authors' other projects
@@ -465,7 +525,7 @@ function Graph({
       return { nodeIds: twoHop, edgeKeys: null };
     }
     return { nodeIds, edgeKeys: null };
-  }, [selectedProject, hoverPersonId, activePersonId, tick === 0]);
+  }, [selectedProject, hoverPersonId, activePersonId, tick === 0, connectionMode, connectBy, projects]);
 
   // Interaction: pan via canvas drag
   const onMouseDown = (e) => {
@@ -652,24 +712,35 @@ function Graph({
             );
           })}
 
-          {/* Project-to-project edges (shared author) */}
+          {/* Project-to-project edges (shared author / area / weak signal) */}
           {connectionMode === 'project-project' && (() => {
             const lines = [];
             const projNodes = sim.nodes.filter(n => n.type === 'project' && visibility.visibleProjectIds.has(n.ref.id));
             const byId = new Map(projNodes.map(n => [n.ref.id, n]));
             const seen = new Set();
+            // Choose which field counts as a "connection"
+            const fieldKey = connectBy === 'area' ? 'areas'
+                           : connectBy === 'weakSignal' ? 'weakSignals'
+                           : 'authors';
             for (const a of projNodes) {
               for (const b of projNodes) {
                 if (a.ref.id >= b.ref.id) continue;
-                const shared = a.ref.authors.filter(x => b.ref.authors.includes(x));
+                const aSet = a.ref[fieldKey] || [];
+                const bSet = b.ref[fieldKey] || [];
+                if (!aSet.length || !bSet.length) continue;
+                const shared = aSet.filter(x => bSet.includes(x));
                 if (!shared.length) continue;
                 const key = a.ref.id + '|' + b.ref.id;
                 if (seen.has(key)) continue;
                 seen.add(key);
                 const hl = highlight.nodeIds;
                 const aId = 'proj:' + a.ref.id, bId = 'proj:' + b.ref.id;
-                const isActive = hl && hl.has(aId) && hl.has(bId);
-                const anyHl = !!hl;
+                const isActive = hl && !highlight.soft && hl.has(aId) && hl.has(bId);
+                const anyHl = !!hl && !highlight.soft;
+                // Thickness scales with number of shared items (capped)
+                const weight = Math.min(shared.length, 5);
+                const baseWidth = 0.45 + (weight - 1) * 0.45; // 0.45 .. 2.25
+                const baseOpacity = 0.25 + Math.min(weight, 4) * 0.07; // 0.32 .. 0.53
                 // Curved path (gentle arc)
                 const mx = (a.x + b.x) / 2;
                 const my = (a.y + b.y) / 2;
@@ -683,10 +754,12 @@ function Graph({
                     d={`M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`}
                     fill="none"
                     stroke={isActive ? '#b84a1f' : '#6b6459'}
-                    strokeWidth={isActive ? 1.4 : 0.6}
-                    strokeOpacity={isActive ? 0.9 : (anyHl ? 0.06 : 0.4)}
+                    strokeWidth={isActive ? baseWidth + 0.8 : baseWidth}
+                    strokeOpacity={isActive ? 0.9 : (anyHl ? 0.06 : baseOpacity)}
                     style={{ transition: 'stroke-opacity 0.15s, stroke-width 0.15s' }}
-                  />
+                  >
+                    <title>{shared.length} shared {connectBy === 'area' ? 'area' : connectBy === 'weakSignal' ? 'weak signal' : 'author'}{shared.length !== 1 ? 's' : ''}: {shared.join(', ')}</title>
+                  </path>
                 );
               }
             }

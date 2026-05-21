@@ -636,6 +636,7 @@ function App() {
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [groupMode, setGroupMode] = useState('free');
   const [viewMode, setViewMode] = useState('both'); // 'both' | 'projects' | 'students'
+  const [connectBy, setConnectBy] = useState('author'); // 'author' | 'area' | 'weakSignal' (only relevant when viewMode === 'projects')
   // connectionMode auto-derives from viewMode
   const connectionMode = viewMode === 'projects' ? 'project-project'
                        : viewMode === 'students' ? 'student-student'
@@ -691,6 +692,7 @@ function App() {
         stats={stats}
         groupMode={groupMode} setGroupMode={setGroupMode}
         viewMode={viewMode} setViewMode={setViewMode}
+        connectBy={connectBy} setConnectBy={setConnectBy}
       />
 
       {tweaks.showIntro && !selectedProject && !searchQuery && !activePersonId && !hoverPersonId && filters.years.size === 0 && filters.clusters.size === 0 && (
@@ -715,6 +717,7 @@ function App() {
         nodeScale={tweaks.nodeScale ?? 1}
         viewMode={viewMode}
         connectionMode={connectionMode}
+        connectBy={connectBy}
       />
 
       <Hints
